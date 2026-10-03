@@ -1,0 +1,29 @@
+RewriteEngine On
+
+# Redirecionamentos 301 — categorias "Financeiras" e "Culinária" foram unidas a
+# "Calculadoras" e "Dia a Dia" respectivamente (consolidação de menu); as
+# ferramentas individuais mantêm suas URLs originais, só a página-índice da
+# categoria antiga muda de lugar.
+RewriteRule ^financeiras/?$ /calculadoras/ [R=301,L]
+RewriteRule ^en/financial/?$ /en/calculators/ [R=301,L]
+RewriteRule ^es/financieras/?$ /es/calculadoras/ [R=301,L]
+RewriteRule ^culinaria/?$ /dia-a-dia/ [R=301,L]
+RewriteRule ^en/cooking/?$ /en/everyday/ [R=301,L]
+RewriteRule ^es/cocina/?$ /es/dia-a-dia/ [R=301,L]
+
+# Serve arquivos e pastas reais diretamente (assets, favicon, etc.)
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Tudo mais vai para o front controller
+RewriteRule ^ index.php [L]
+
+# Cache básico para assets estáticos
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 month"
+  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+</IfModule>
