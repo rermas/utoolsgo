@@ -1,0 +1,7 @@
+---
+# Deploy do cPanel (Git Version Control): copia o uToolsGo para a pasta do site.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home1/simul637/utoolsgo.com/
+    - /bin/cp -Rf assets data includes ${DEPLOYPATH}
+    - /bin/cp -f index.php .htaccess robots.txt sitemap.xml ${DEPLOYPATH}
