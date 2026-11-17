@@ -1,6 +1,8 @@
 <?php
+// Uso: php gen_sitemap.php (somente linha de comando; bloqueado também no .htaccess)
+if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
 chdir(__DIR__);
-$base = '/mnt/user-data/outputs/utoolsgo';
+$base = __DIR__;
 require $base . '/includes/functions.php';
 $tools = include $base . '/data/tools.php';
 $i18n = include $base . '/data/i18n.php';

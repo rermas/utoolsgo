@@ -42,11 +42,11 @@
       else if (bmi < 35) classification = T.obese1;
       else if (bmi < 40) classification = T.obese2;
       else classification = T.obese3;
-      var min = (18.5 * heightM * heightM).toFixed(1);
-      var max = (24.9 * heightM * heightM).toFixed(1);
+      var min = nfx(18.5 * heightM * heightM, 1);
+      var max = nfx(24.9 * heightM * heightM, 1);
       var rangeText = T.rangeText.replace('{min}', min).replace('{max}', max);
       showResult(card,
-        '<div class="result-value">' + T.resultPrefix + ': ' + bmi.toFixed(1) + '</div>' +
+        '<div class="result-value">' + T.resultPrefix + ': ' + nfx(bmi, 1) + '</div>' +
         '<div class="result-classification">' + classification + '</div>' +
         '<div class="result-extra">' + rangeText + '</div>'
       );
@@ -64,9 +64,9 @@
       }
       var result = (value * percent) / 100;
       var text = T.resultTemplate
-        .replace('{percent}', percent)
-        .replace('{value}', value)
-        .replace('{result}', result.toLocaleString(undefined, { maximumFractionDigits: 4 }));
+        .replace('{percent}', pageLang() === 'en' ? percent : String(percent).replace('.', ','))
+        .replace('{value}', pageLang() === 'en' ? value : String(value).replace('.', ','))
+        .replace('{result}', pageLang() === 'en' ? result.toLocaleString(undefined, { maximumFractionDigits: 4 }) : nfm(result, 4));
       showResult(card, '<div class="result-value">' + text + '</div>');
     });
   }
@@ -90,9 +90,9 @@
       var units = T.units || { C: 'Celsius', F: 'Fahrenheit', K: 'Kelvin' };
 
       showResult(card,
-        '<div class="result-extra">' + units.C + ': <strong>' + celsius.toFixed(2) + '</strong></div>' +
-        '<div class="result-extra">' + units.F + ': <strong>' + fahrenheit.toFixed(2) + '</strong></div>' +
-        '<div class="result-extra">' + units.K + ': <strong>' + kelvin.toFixed(2) + '</strong></div>'
+        '<div class="result-extra">' + units.C + ': <strong>' + nfx(celsius, 2) + '</strong></div>' +
+        '<div class="result-extra">' + units.F + ': <strong>' + nfx(fahrenheit, 2) + '</strong></div>' +
+        '<div class="result-extra">' + units.K + ': <strong>' + nfx(kelvin, 2) + '</strong></div>'
       );
     });
   }
@@ -432,7 +432,7 @@
         .slice(0, 20);
 
       var rows = sorted.map(function (row) {
-        var density = ((row.count / total) * 100).toFixed(1) + '%';
+        var density = nfx((row.count / total) * 100, 1) + '%';
         return '<tr><td>' + row.word + '</td><td>' + row.count + '</td><td>' + density + '</td></tr>';
       }).join('');
 
@@ -715,8 +715,8 @@
   // ---------------------------------------------------------- IMAGE CONVERTER
   function fmtBytes(n) {
     if (n < 1024) return n + ' B';
-    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-    return (n / 1024 / 1024).toFixed(2) + ' MB';
+    if (n < 1024 * 1024) return nfx(n / 1024, 1) + ' KB';
+    return nfx(n / 1024 / 1024, 2) + ' MB';
   }
 
   function initImageConverter(card, T) {
@@ -871,6 +871,13 @@
     return 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // Moeda para ferramentas não específicas do Brasil: em pt mantém "R$ 1.234,56"; em en/es, só o número.
+  function fmtMoney(n) {
+    var l = String(document.documentElement.lang || 'pt').slice(0, 2);
+    if (l === 'en' || l === 'es') return fmtNum(n, l, 2);
+    return fmtBRL(n);
+  }
+
   // Tabela INSS 2026 (empregado CLT) — teto R$ 8.475,55, contribuição máxima R$ 988,09.
   var INSS_TABLE_2026 = [
     { limit: 1621.00, rate: 0.075, deduct: 0 },
@@ -985,8 +992,10 @@
       var tercoAbono = diasAbono > 0 ? round2(abono / 3) : 0;
       var totalBruto = round2(proporcional + terco + abono + tercoAbono);
 
-      var inss = calcINSS(proporcional);
-      var irrf = calcIRRF(Math.max(0, proporcional - inss), proporcional);
+      // Base de INSS/IRRF: férias gozadas + 1/3 constitucional (abono pecuniário e seu terço são isentos).
+      var baseTributavel = round2(proporcional + terco);
+      var inss = calcINSS(baseTributavel);
+      var irrf = calcIRRF(Math.max(0, baseTributavel - inss), baseTributavel);
       var totalLiquido = round2(totalBruto - inss - irrf);
 
       var html = '<div class="result-extra">' + T.proporcional + ': <strong>' + fmtBRL(proporcional) + '</strong></div>' +
@@ -1192,6 +1201,15 @@
     return (n || 0).toLocaleString(localeFor(lang), { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   }
 
+  // Locale-aware helpers for results rendered from raw numbers (page language from <html lang>).
+  function pageLang() { return String(document.documentElement.lang || 'pt').slice(0, 2); }
+  function nfx(n, decimals) { return fmtNum(n, pageLang(), decimals); }
+  function nfm(n, maxDecimals) {
+    var l = pageLang();
+    // en keeps the historical plain output (no thousands separator); pt/es group with "." and use "," for decimals.
+    return (n || 0).toLocaleString(localeFor(l), { minimumFractionDigits: 0, maximumFractionDigits: maxDecimals, useGrouping: l !== 'en' });
+  }
+
   // ---------------------------------------------------------- SIMPLE INTEREST
   function initSimpleInterest(card, T) {
     on(card, 'calc', function () {
@@ -1379,7 +1397,7 @@
       if (precoStr !== '') {
         var preco = parseFloat(precoStr);
         if (preco > 0) {
-          var custoPorKm = round2((litros * preco) / distancia);
+          var custoPorKm = (litros * preco) / distancia;
           var custoTotal = round2(litros * preco);
           html += '<div class="result-extra">' + T.custoPorKm + ': <strong>' + fmtNum(custoPorKm, lang, 3) + '</strong></div>' +
             '<div class="result-extra">' + T.custoTotal + ': <strong>' + fmtNum(custoTotal, lang) + '</strong></div>';
@@ -1747,8 +1765,9 @@
       var base = parseInt(document.getElementById('baseOrigem').value, 10);
       var cleaned = base === 16 ? raw.replace(/^0x/i, '') : raw;
       if (!cleaned || !validPattern[base].test(cleaned)) { alert(T.error); return; }
-      var n = parseInt(cleaned, base);
-      if (isNaN(n) || n < 0) { alert(T.error); return; }
+      var n;
+      try { n = BigInt(({ 2: '0b', 8: '0o', 10: '', 16: '0x' })[base] + cleaned); } catch (e) { alert(T.error); return; }
+      if (n < 0n) { alert(T.error); return; }
       var rows = [
         ['bin', n.toString(2)],
         ['oct', n.toString(8)],
@@ -1961,30 +1980,37 @@
   }
 
   // ---------------------------------------------------------- CSV <-> JSON
-  function parseCSVLine(line) {
-    var out = [], cur = '', inQuotes = false;
-    for (var i = 0; i < line.length; i++) {
-      var ch = line[i];
+  // Parser CSV de estado: aceita campos entre aspas com vírgulas, aspas duplicadas ("") e quebras de linha.
+  function parseCSV(text) {
+    var rows = [], row = [], cur = '', inQuotes = false, quoted = false;
+    function endField() { row.push(cur); cur = ''; }
+    function endRow() {
+      endField();
+      if (!(row.length === 1 && row[0] === '' && !quoted)) rows.push(row);
+      row = []; quoted = false;
+    }
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
       if (inQuotes) {
-        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++; }
         else if (ch === '"') { inQuotes = false; }
         else { cur += ch; }
-      } else {
-        if (ch === '"') inQuotes = true;
-        else if (ch === ',') { out.push(cur); cur = ''; }
-        else cur += ch;
-      }
+      } else if (ch === '"') { inQuotes = true; quoted = true; }
+      else if (ch === ',') { endField(); }
+      else if (ch === '\r' && text[i + 1] === '\n') { /* \r\n: o \n encerra a linha */ }
+      else if (ch === '\n' || ch === '\r') { endRow(); }
+      else { cur += ch; }
     }
-    out.push(cur);
-    return out;
+    if (cur !== '' || row.length || quoted) endRow();
+    return rows;
   }
   function csvToJson(text) {
-    var lines = text.replace(/\r\n/g, '\n').split('\n').filter(function (l) { return l.length > 0; });
-    if (!lines.length) return [];
-    var headers = parseCSVLine(lines[0]);
+    var parsed = parseCSV(text);
+    if (!parsed.length) return [];
+    var headers = parsed[0];
     var rows = [];
-    for (var i = 1; i < lines.length; i++) {
-      var cells = parseCSVLine(lines[i]);
+    for (var i = 1; i < parsed.length; i++) {
+      var cells = parsed[i];
       var obj = {};
       headers.forEach(function (h, idx) { obj[h] = cells[idx] !== undefined ? cells[idx] : ''; });
       rows.push(obj);
@@ -2381,16 +2407,22 @@
   }
 
   // ---------------------------------------------------------- USER-AGENT PARSER
-  function parseUserAgent(ua) {
-    var os = 'Desconhecido';
+  var UA_WORDS = {
+    pt: { unknown: 'Desconhecido', mobile: 'Celular', tablet: 'Tablet', desktop: 'Desktop' },
+    en: { unknown: 'Unknown', mobile: 'Mobile', tablet: 'Tablet', desktop: 'Desktop' },
+    es: { unknown: 'Desconocido', mobile: 'M\u00f3vil', tablet: 'Tablet', desktop: 'Escritorio' },
+  };
+  function parseUserAgent(ua, lang) {
+    var W = UA_WORDS[lang] || UA_WORDS[String(document.documentElement.lang || 'pt').slice(0, 2)] || UA_WORDS.pt;
+    var os = W.unknown;
     if (/Windows NT 10/.test(ua)) os = 'Windows 10/11';
     else if (/Windows NT/.test(ua)) os = 'Windows';
+    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
     else if (/Mac OS X/.test(ua)) os = 'macOS';
     else if (/Android/.test(ua)) os = 'Android';
-    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
     else if (/Linux/.test(ua)) os = 'Linux';
 
-    var browser = 'Desconhecido', version = '';
+    var browser = W.unknown, version = '';
     var m;
     if ((m = ua.match(/Edg\/([\d.]+)/))) { browser = 'Microsoft Edge'; version = m[1]; }
     else if ((m = ua.match(/OPR\/([\d.]+)/))) { browser = 'Opera'; version = m[1]; }
@@ -2399,14 +2431,14 @@
     else if ((m = ua.match(/Version\/([\d.]+).*Safari/))) { browser = 'Safari'; version = m[1]; }
     else if ((m = ua.match(/MSIE ([\d.]+)/)) || (m = ua.match(/rv:([\d.]+)\) like Gecko/))) { browser = 'Internet Explorer'; version = m[1]; }
 
-    var engine = 'Desconhecido';
+    var engine = W.unknown;
     if (/AppleWebKit/.test(ua)) engine = /Gecko\)/.test(ua) === false && /Chrome|Safari/.test(ua) ? 'WebKit/Blink' : 'WebKit';
     if (/Gecko\//.test(ua)) engine = 'Gecko';
     if (/Trident/.test(ua)) engine = 'Trident';
 
-    var device = /Mobi|Android.*Mobile|iPhone/.test(ua) ? 'Celular' : (/iPad|Tablet/.test(ua) ? 'Tablet' : 'Desktop');
+    var device = /iPad|Tablet/.test(ua) ? W.tablet : (/Mobi|Android.*Mobile|iPhone/.test(ua) ? W.mobile : W.desktop);
 
-    return { os: os, browser: browser, version: version || '—', engine: engine, device: device };
+    return { os: os, browser: browser, version: version || '\u2014', engine: engine, device: device };
   }
   function initUserAgentParser(card, T) {
     var input = card.querySelector('[data-role="input"]');
@@ -2414,7 +2446,7 @@
     on(card, 'calc', function () {
       var ua = input.value.trim();
       if (!ua) { showResult(card, '<div class="result-extra">' + T.error + '</div>'); return; }
-      var info = parseUserAgent(ua);
+      var info = parseUserAgent(ua, card.dataset.lang);
       var rows = [
         [T.rowBrowser, info.browser], [T.rowVersion, info.version], [T.rowEngine, info.engine],
         [T.rowOs, info.os], [T.rowDevice, info.device],
@@ -2573,7 +2605,7 @@
       }
       showResult(card,
         '<div class="contrast-preview" style="background:' + bg + ';color:' + fg + '">' + T.previewText + '</div>' +
-        '<div class="contrast-ratio">' + ratio.toFixed(2) + ':1</div>' +
+        '<div class="contrast-ratio">' + nfx(ratio, 2) + ':1</div>' +
         '<div class="contrast-badges">' +
         badge('AA — ' + T.normalText, 4.5) + badge('AA — ' + T.largeText, 3) +
         badge('AAA — ' + T.normalText, 7) + badge('AAA — ' + T.largeText, 4.5) +
@@ -3036,6 +3068,10 @@
   function initPdfCompress(card, T) { initPdfSingleTool(card, T, 'pdfcompress'); }
 
   // ---- Comprimir imagem / Redimensionar imagem ----
+  // O canvas só gera PNG/JPEG/WebP: qualquer outro mime (gif, bmp...) sai como PNG.
+  function normalizeImgMime(m) {
+    return m === 'image/jpeg' || m === 'image/webp' || m === 'image/png' ? m : 'image/png';
+  }
   function initImgTool2(card, T, mode) {
     var box = card.querySelector('.img-tool2');
     var maxMb = parseFloat(box.dataset.maxMb) || 20;
@@ -3157,7 +3193,7 @@
         canvas.height = currentImgEl.naturalHeight;
         var ctx = canvas.getContext('2d');
         var fmtChoice = formatSelect.value;
-        var toMime = fmtChoice === 'jpg' ? 'image/jpeg' : fmtChoice === 'webp' ? 'image/webp' : (currentFile.type || 'image/png');
+        var toMime = fmtChoice === 'jpg' ? 'image/jpeg' : fmtChoice === 'webp' ? 'image/webp' : normalizeImgMime(currentFile.type);
         if (toMime === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
         ctx.drawImage(currentImgEl, 0, 0);
         var quality = parseInt(qualityInput.value, 10) / 100;
@@ -3173,7 +3209,7 @@
         canvas2.width = w;
         canvas2.height = h;
         var ctx2 = canvas2.getContext('2d');
-        var mime2 = currentFile.type === 'image/jpeg' ? 'image/jpeg' : (currentFile.type || 'image/png');
+        var mime2 = normalizeImgMime(currentFile.type);
         if (mime2 === 'image/jpeg') { ctx2.fillStyle = '#ffffff'; ctx2.fillRect(0, 0, w, h); }
         ctx2.drawImage(currentImgEl, 0, 0, w, h);
         canvas2.toBlob(function (blob) {
@@ -3196,7 +3232,8 @@
       }
       convertedMeta.textContent = metaText;
       downloadBtn.href = convertedObjectUrl;
-      var ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : mime === 'image/png' ? 'png' : 'img';
+      var outMime = blob.type && blob.type !== 'application/octet-stream' ? blob.type : mime;
+      var ext = outMime === 'image/jpeg' ? 'jpg' : outMime === 'image/webp' ? 'webp' : 'png';
       var baseName = (currentFile.name || 'imagem').replace(/\.[^.]+$/, '');
       downloadBtn.setAttribute('download', baseName + (mode === 'imgcompress' ? '-comprimida' : '-redimensionada') + '.' + ext);
       downloadBtn.style.display = '';
@@ -3424,6 +3461,8 @@
       str = str.replace(/\./g, '').replace(',', '.');
     } else if (hasComma && !hasDot) {
       str = str.replace(',', '.');
+    } else if (hasDot && /^[1-9]\d{0,2}(\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, '');
     }
     var num = parseFloat(str);
     if (isNaN(num)) return null;
@@ -4108,6 +4147,10 @@
           restante -= qtd * d[0];
         }
       });
+      if (restante > 0) {
+        // sobra menor que a menor moeda em circulação (R$ 0,05): mostrada de forma discreta
+        rows.push('<tr style="opacity:.6"><td>' + T.m001 + '</td><td class="result-value" style="font-size:1rem">' + restante + '</td></tr>');
+      }
       var trocoTotal = (trocoCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       var html = '<div class="result-value">' + T.trocoTotal + ': ' + trocoTotal + '</div>' +
         '<table class="result-table"><thead><tr><th>' + T.denomHeader + '</th><th>' + T.qtdHeader + '</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';
@@ -4537,9 +4580,12 @@
       var network = (netIp & maskInt) >>> 0;
       var broadcast = (network | (~maskInt >>> 0)) >>> 0;
       var belongs = ((ip & maskInt) >>> 0) === network;
+      // /32: só o próprio endereço; /31: ambos os endereços (RFC 3021); demais: rede+1 .. broadcast-1
+      var firstUsable = prefix >= 31 ? network : (network + 1) >>> 0;
+      var lastUsable = prefix === 32 ? network : (prefix === 31 ? broadcast : (broadcast - 1) >>> 0);
       var html = '<div class="status-box ' + (belongs ? 'ok' : 'err') + '" style="display:inline-block;padding:6px 14px;border-radius:20px;font-weight:700">' + (belongs ? T.pertence : T.naoPertence) + '</div>' +
         '<div class="result-extra">' + T.rowNetwork + ': <strong>' + intToIp(network) + '/' + prefix + '</strong></div>' +
-        '<div class="result-extra">' + T.rowUsableRange + ': <strong>' + intToIp((network + 1) >>> 0) + ' – ' + intToIp((broadcast - 1) >>> 0) + '</strong></div>';
+        '<div class="result-extra">' + T.rowUsableRange + ': <strong>' + intToIp(firstUsable) + ' – ' + intToIp(lastUsable) + '</strong></div>';
       showResult(card, html);
     });
   }
@@ -4652,7 +4698,7 @@
   // ---------------------------------------------------------- TABELA DE CÓDIGOS DE STATUS HTTP
   var HTTP_STATUS_CODES = [
     [200, 'OK'], [201, 'Created'], [202, 'Accepted'], [204, 'No Content'],
-    [301, 'Moved Permanently'], [302, 'Found (Redirecionamento temporário)'], [304, 'Not Modified'], [307, 'Temporary Redirect'], [308, 'Permanent Redirect'],
+    [301, 'Moved Permanently'], [302, 'Found'], [304, 'Not Modified'], [307, 'Temporary Redirect'], [308, 'Permanent Redirect'],
     [400, 'Bad Request'], [401, 'Unauthorized'], [402, 'Payment Required'], [403, 'Forbidden'], [404, 'Not Found'],
     [405, 'Method Not Allowed'], [406, 'Not Acceptable'], [408, 'Request Timeout'], [409, 'Conflict'], [410, 'Gone'],
     [413, 'Payload Too Large'], [414, 'URI Too Long'], [415, 'Unsupported Media Type'], [418, "I'm a teapot"], [422, 'Unprocessable Entity'],
@@ -4693,7 +4739,7 @@
     var descs = HTTP_STATUS_DESC[lang] || HTTP_STATUS_DESC.pt;
     var f = (filtro || '').trim().toLowerCase();
     var filtered = HTTP_STATUS_CODES.filter(function (c) {
-      return !f || String(c[0]).indexOf(f) !== -1 || c[1].toLowerCase().indexOf(f) !== -1;
+      return !f || String(c[0]).indexOf(f) !== -1 || c[1].toLowerCase().indexOf(f) !== -1 || String(descs[c[0]] || '').toLowerCase().indexOf(f) !== -1;
     });
     var rows = filtered.map(function (c) {
       var color = c[0] < 300 ? 'var(--ok,#166534)' : (c[0] < 400 ? 'var(--primary,#2c65f2)' : 'var(--err,#b91c1c)');
@@ -4769,7 +4815,7 @@
       var speedBps = velocidade * speedBitsFactor;
       var seconds = fileBits / speedBps;
       var html = '<div class="result-value">' + T.tempoEstimado + ': ' + fmtTime(seconds) + '</div>' +
-        '<div class="result-extra">' + T.velocidadeReal + ': <strong>' + (speedBps / 8 / 1000000).toLocaleString(card.dataset.lang === 'pt' ? 'pt-BR' : 'en-US', { maximumFractionDigits: 2 }) + ' MB/s</strong></div>';
+        '<div class="result-extra">' + T.velocidadeReal + ': <strong>' + (speedBps / 8 / 1000000).toLocaleString(localeFor(card.dataset.lang), { maximumFractionDigits: 2 }) + ' MB/s</strong></div>';
       showResult(card, html);
     });
   }
@@ -4983,8 +5029,8 @@
       var trimestre = semanas < 13 ? 1 : (semanas < 27 ? 2 : 3);
       var diasAteParto = Math.max(0, diasEntreDatas(hoje, dpp));
       var dppFmt = dpp.toLocaleDateString(localeFor(lang), { day: '2-digit', month: 'long', year: 'numeric' });
-      var html = '<div class="result-value">' + T.idadeGestacionalLabel + ': ' + semanas + T.semanasAbrev + ' ' + dias + T.diasAbrev + '</div>' +
-        '<div class="result-extra">' + T.trimestreLabel + ': <strong>' + trimestre + 'º</strong></div>' +
+      var html = '<div class="result-value">' + T.idadeGestacionalLabel + ': ' + semanas + ' ' + T.semanasAbrev + ' ' + dias + ' ' + T.diasAbrev + '</div>' +
+        '<div class="result-extra">' + T.trimestreLabel + ': <strong>' + (lang === 'en' ? trimestre + ({ 1: 'st', 2: 'nd', 3: 'rd' })[trimestre] : trimestre + 'º') + '</strong></div>' +
         '<div class="result-extra">' + T.dppLabel + ': <strong>' + dppFmt + '</strong></div>' +
         '<div class="result-extra">' + T.diasRestantesLabel + ': <strong>' + diasAteParto + '</strong></div>';
       showResult(card, html);
@@ -5054,10 +5100,10 @@
         var qtd = parseFracaoQuantidade(m[1]);
         if (qtd === null) return escHtml(linha);
         var novaQtd = qtd * fator;
-        var novaQtdStr = novaQtd % 1 === 0 ? String(novaQtd) : novaQtd.toFixed(2).replace(/\.?0+$/, '');
+        var novaQtdStr = novaQtd % 1 === 0 ? String(novaQtd) : nfm(Math.round(novaQtd * 100) / 100, 2);
         return '<strong>' + novaQtdStr + '</strong> ' + escHtml(m[2]);
       });
-      var html = '<div class="result-extra">' + T.fatorLabel + ': <strong>' + fator.toFixed(2) + 'x</strong></div>' +
+      var html = '<div class="result-extra">' + T.fatorLabel + ': <strong>' + nfx(fator, 2) + 'x</strong></div>' +
         '<div class="result-value" style="text-align:left;font-size:1rem;line-height:1.9">' + resultLines.join('<br>') + '</div>';
       showResult(card, html);
     });
@@ -5142,8 +5188,8 @@
 
   // ---------------------------------------------------------- CALCULADORA DE FATORIAL, COMBINAÇÃO E PERMUTAÇÃO
   function factorialOf(n) {
-    var r = 1;
-    for (var i = 2; i <= n; i++) r *= i;
+    var r = 1n;
+    for (var i = 2; i <= n; i++) r *= BigInt(i);
     return r;
   }
   function initFactorialCombinatoricsCalculator(card, T) {
@@ -5161,15 +5207,16 @@
       if (isNaN(n) || n < 0 || n > 170) { alert(T.error); return; }
       if (modo !== 'fatorial' && (isNaN(r) || r < 0 || r > n)) { alert(T.errorR); return; }
       var html;
+      var loc = localeFor(card.dataset.lang);
       if (modo === 'fatorial') {
-        html = '<div class="result-value">' + n + '! = ' + factorialOf(n).toLocaleString() + '</div>';
+        html = '<div class="result-value" style="overflow-wrap:anywhere">' + n + '! = ' + factorialOf(n).toLocaleString(loc) + '</div>';
       } else if (modo === 'combinacao') {
         var comb = factorialOf(n) / (factorialOf(r) * factorialOf(n - r));
-        html = '<div class="result-value">C(' + n + ',' + r + ') = ' + comb.toLocaleString() + '</div>' +
+        html = '<div class="result-value" style="overflow-wrap:anywhere">C(' + n + ',' + r + ') = ' + comb.toLocaleString(loc) + '</div>' +
           '<div class="result-extra">' + T.combinacaoNota + '</div>';
       } else {
         var perm = factorialOf(n) / factorialOf(n - r);
-        html = '<div class="result-value">P(' + n + ',' + r + ') = ' + perm.toLocaleString() + '</div>' +
+        html = '<div class="result-value" style="overflow-wrap:anywhere">P(' + n + ',' + r + ') = ' + perm.toLocaleString(loc) + '</div>' +
           '<div class="result-extra">' + T.permutacaoNota + '</div>';
       }
       showResult(card, html);
@@ -5250,10 +5297,11 @@
       var final = parseFloat(document.getElementById('valorFinal').value);
       if (isNaN(inicial) || inicial === 0 || isNaN(final)) { alert(T.error); return; }
       var variacao = (final - inicial) / Math.abs(inicial) * 100;
-      var subiu = variacao >= 0;
-      var html = '<div class="status-box ' + (subiu ? 'ok' : 'err') + '" style="display:inline-block;padding:6px 14px;border-radius:20px;font-weight:700">' +
+      var subiu = variacao > 0;
+      var neutro = variacao === 0;
+      var html = '<div class="status-box ' + (subiu || neutro ? 'ok' : 'err') + '" style="display:inline-block;padding:6px 14px;border-radius:20px;font-weight:700">' +
         (subiu ? '+' : '') + fmtNum(variacao, lang, 2) + '%</div>' +
-        '<div class="result-extra">' + (subiu ? T.aumentoLabel : T.reducaoLabel) + '</div>';
+        (neutro ? '' : '<div class="result-extra">' + (subiu ? T.aumentoLabel : T.reducaoLabel) + '</div>');
       showResult(card, html);
     });
   }
@@ -5579,7 +5627,7 @@
       if (isNaN(atual)) atual = 0;
       if (isNaN(aporte)) aporte = 0;
       if (isNaN(taxaAnual) || taxaAnual < 0 || !anos || anos <= 0) { alert(T.error); return; }
-      var i = taxaAnual / 100 / 12;
+      var i = Math.pow(1 + taxaAnual / 100, 1 / 12) - 1;
       var n = anos * 12;
       var fatorCrescimento = Math.pow(1 + i, n);
       var vf;
@@ -5621,7 +5669,7 @@
       var diffDias = diasEntreDatas(hoje, dataMeta);
       var n = Math.round(diffDias / 30.4375);
       if (n <= 0) { alert(T.dateError); return; }
-      var i = taxaAnual / 100 / 12;
+      var i = Math.pow(1 + taxaAnual / 100, 1 / 12) - 1;
       var fatorCrescimento = Math.pow(1 + i, n);
       var vfAtual = atual * fatorCrescimento;
       if (vfAtual >= meta) {
@@ -5660,36 +5708,37 @@
       if (order === 'snowball') return a.balance - b.balance;
       return b.rate - a.rate;
     });
+    // Orçamento mensal fixo = soma dos mínimos originais + extra: o mínimo das dívidas quitadas
+    // passa a engrossar o pagamento da dívida prioritária (roll-over).
+    var budget = extraMonthly;
+    for (var b = 0; b < d.length; b++) budget += d[b].minPayment;
+    function hasDebt() { return d.some(function (x) { return x.balance > 0.005; }); }
     var totalInterest = 0;
     var months = 0;
     var maxMonths = 1200;
-    while (d.some(function (x) { return x.balance > 0.005; }) && months < maxMonths) {
+    while (hasDebt() && months < maxMonths) {
       months++;
-      var freedUp = 0;
-      // charge interest and take minimum payments
+      var pool = budget;
+      // juros (taxa MENSAL) e pagamentos mínimos
       for (var i = 0; i < d.length; i++) {
         if (d[i].balance <= 0.005) { continue; }
-        var interest = d[i].balance * (d[i].rate / 100 / 12);
+        var interest = d[i].balance * (d[i].rate / 100);
         totalInterest += interest;
         d[i].balance += interest;
         var pay = Math.min(d[i].minPayment, d[i].balance);
         d[i].balance -= pay;
+        pool -= pay;
       }
-      // find first still-unpaid debt in priority order and dump extra + freed-up minimums
-      var extraPool = extraMonthly;
-      for (var j = 0; j < d.length; j++) {
-        if (d[j].balance <= 0.005) { freedUp += 0; continue; }
-      }
-      for (var k = 0; k < d.length; k++) {
+      // sobra (extra + mínimos liberados) vai para a dívida prioritária ainda aberta
+      for (var k = 0; k < d.length && pool > 0; k++) {
         if (d[k].balance > 0.005) {
-          var pay2 = Math.min(extraPool, d[k].balance);
+          var pay2 = Math.min(pool, d[k].balance);
           d[k].balance -= pay2;
-          extraPool -= pay2;
-          if (extraPool <= 0) break;
+          pool -= pay2;
         }
       }
     }
-    return { months: months, totalInterest: round2(totalInterest), reached: months < maxMonths };
+    return { months: months, totalInterest: round2(totalInterest), reached: !hasDebt() };
   }
   function initDebtPayoffCalculator(card, T) {
     on(card, 'calc', function () {
@@ -5701,11 +5750,14 @@
       var snowball = simulateDebtPayoff(debts, extra, 'snowball');
       var avalanche = simulateDebtPayoff(debts, extra, 'avalanche');
       var html = '<table class="result-table"><thead><tr><th></th><th>' + T.monthsLabel + '</th><th>' + T.totalInterestLabel + '</th></tr></thead><tbody>' +
-        '<tr><td>' + T.snowballLabel + '</td><td>' + snowball.months + '</td><td>' + fmtNum(snowball.totalInterest, lang) + '</td></tr>' +
-        '<tr><td>' + T.avalancheLabel + '</td><td>' + avalanche.months + '</td><td>' + fmtNum(avalanche.totalInterest, lang) + '</td></tr>' +
+        '<tr><td>' + T.snowballLabel + '</td><td>' + (snowball.reached ? snowball.months : '\u221e') + '</td><td>' + (snowball.reached ? fmtNum(snowball.totalInterest, lang) : '\u2014') + '</td></tr>' +
+        '<tr><td>' + T.avalancheLabel + '</td><td>' + (avalanche.reached ? avalanche.months : '\u221e') + '</td><td>' + (avalanche.reached ? fmtNum(avalanche.totalInterest, lang) : '\u2014') + '</td></tr>' +
         '</tbody></table>';
-      var cheaper = avalanche.totalInterest <= snowball.totalInterest ? T.avalancheLabel : T.snowballLabel;
-      html += '<div class="result-extra">' + T.cheaperLabel + ': <strong>' + cheaper + '</strong></div>';
+      var cheaper = null;
+      if (snowball.reached && avalanche.reached) cheaper = avalanche.totalInterest <= snowball.totalInterest ? T.avalancheLabel : T.snowballLabel;
+      else if (avalanche.reached) cheaper = T.avalancheLabel;
+      else if (snowball.reached) cheaper = T.snowballLabel;
+      if (cheaper) html += '<div class="result-extra">' + T.cheaperLabel + ': <strong>' + cheaper + '</strong></div>';
       showResult(card, html);
     });
   }
@@ -5734,8 +5786,8 @@
       preco = round2(preco); lucro = round2(lucro);
       var html = '<div class="result-value">' + T.salePriceLabel + ': ' + fmtNum(preco, lang) + '</div>' +
         '<div class="result-extra">' + T.profitLabel + ': <strong>' + fmtNum(lucro, lang) + '</strong></div>' +
-        '<div class="result-extra">' + T.markupLabel + ': <strong>' + markup.toFixed(2) + '%</strong></div>' +
-        '<div class="result-extra">' + T.marginLabel + ': <strong>' + margem.toFixed(2) + '%</strong></div>';
+        '<div class="result-extra">' + T.markupLabel + ': <strong>' + nfx(markup, 2) + '%</strong></div>' +
+        '<div class="result-extra">' + T.marginLabel + ': <strong>' + nfx(margem, 2) + '%</strong></div>';
       showResult(card, html);
     });
   }
@@ -5774,8 +5826,8 @@
       var margemContribuicao = preco - varUnit;
       if (margemContribuicao <= 0) { alert(T.priceError); return; }
       var qty = fixos / margemContribuicao;
-      var receita = qty * preco;
-      var html = '<div class="result-value">' + T.breakevenQtyLabel + ': ' + Math.ceil(qty).toLocaleString(localeFor(lang)) + '</div>' +
+      var receita = Math.ceil(qty - 1e-9) * preco;
+      var html = '<div class="result-value">' + T.breakevenQtyLabel + ': ' + Math.ceil(qty - 1e-9).toLocaleString(localeFor(lang)) + '</div>' +
         '<div class="result-extra">' + T.breakevenRevenueLabel + ': <strong>' + fmtNum(round2(receita), lang) + '</strong></div>' +
         '<div class="result-extra">' + T.contributionMarginLabel + ': <strong>' + fmtNum(round2(margemContribuicao), lang) + '</strong></div>';
       showResult(card, html);
@@ -5788,11 +5840,11 @@
 
   // ---------------------------------------------------------- TEXT CASE CONVERTER
   function toTitleCase(s) {
-    return s.replace(/\w\S*/g, function (w) { return w.charAt(0).toUpperCase() + w.substr(1).toLowerCase(); });
+    return s.replace(/[\p{L}\p{N}_]\S*/gu, function (w) { var cp = Array.from(w); return cp[0].toUpperCase() + cp.slice(1).join('').toLowerCase(); });
   }
   function toSentenceCase(s) {
     var lower = s.toLowerCase();
-    return lower.replace(/(^\s*\w|[.!?]\s+\w)/g, function (c) { return c.toUpperCase(); });
+    return lower.replace(/(^\s*[\p{L}\p{N}_]|[.!?]\s+[\p{L}\p{N}_])/gu, function (c) { return c.toUpperCase(); });
   }
   function toToggleCase(s) {
     var out = '';
@@ -6251,7 +6303,7 @@
       var minima = parseFloat(document.getElementById('frequenciaMinima').value);
       if (!total || total <= 0 || isNaN(faltas) || faltas < 0 || faltas > total || !minima || minima <= 0 || minima > 100) { alert(T.error); return; }
       var freqAtual = ((total - faltas) / total) * 100;
-      var maxFaltasPermitidas = Math.floor(total * (1 - minima / 100));
+      var maxFaltasPermitidas = Math.floor(total * (100 - minima) / 100 + 1e-9);
       var faltasRestantes = Math.max(0, maxFaltasPermitidas - faltas);
       var apto = freqAtual >= minima;
       var html = '<div class="result-value" style="color:' + (apto ? 'var(--ok,#166534)' : 'var(--err,#b91c1c)') + '">' + fmtNum(freqAtual, lang, 1) + '%</div>' +
@@ -6569,11 +6621,11 @@
       }
       var diffNominal = round2(novo - atual);
       var percentNominal = round2(((novo / atual) - 1) * 100);
-      var html = '<div class="result-value">' + T.newSalaryLabel + ': ' + fmtBRL(round2(novo)) + '</div>' +
-        '<div class="result-extra">' + T.nominalDiffLabel + ': <strong>' + fmtBRL(diffNominal) + ' (' + percentNominal + '%)</strong></div>';
+      var html = '<div class="result-value">' + T.newSalaryLabel + ': ' + fmtMoney(round2(novo)) + '</div>' +
+        '<div class="result-extra">' + T.nominalDiffLabel + ': <strong>' + fmtMoney(diffNominal) + ' (' + percentNominal + '%)</strong></div>';
       if (!isNaN(inflacao)) {
         var percentReal = round2((((1 + percentNominal / 100) / (1 + inflacao / 100)) - 1) * 100);
-        html += '<div class="result-extra">' + T.realDiffLabel + ': <strong>' + percentReal + '%</strong></div>';
+        html += '<div class="result-extra">' + T.realDiffLabel + ': <strong>' + nfm(percentReal, 2) + '%</strong></div>';
       }
       showResult(card, html);
     });
@@ -6591,8 +6643,8 @@
       var totalA = round2(aSal + aVr + aHealth);
       var totalB = round2(bSal + bVr + bHealth);
       var winner = totalA === totalB ? T.tieLabel : (totalA > totalB ? T.offerALabel : T.offerBLabel);
-      var html = '<div class="result-extra">' + T.offerALabel + ' — ' + T.totalPackageLabel + ': <strong>' + fmtBRL(totalA) + '</strong></div>' +
-        '<div class="result-extra">' + T.offerBLabel + ' — ' + T.totalPackageLabel + ': <strong>' + fmtBRL(totalB) + '</strong></div>' +
+      var html = '<div class="result-extra">' + T.offerALabel + ' — ' + T.totalPackageLabel + ': <strong>' + fmtMoney(totalA) + '</strong></div>' +
+        '<div class="result-extra">' + T.offerBLabel + ' — ' + T.totalPackageLabel + ': <strong>' + fmtMoney(totalB) + '</strong></div>' +
         '<div class="result-value">' + T.betterOfferLabel + ': ' + winner + '</div>';
       showResult(card, html);
     });
@@ -6603,7 +6655,7 @@
       var lang = card.dataset.lang;
       var salario = parseFloat(document.getElementById('monthlySalaryClt').value);
       var horasSemana = parseFloat(document.getElementById('weeklyHoursClt').value);
-      if (!salario || salario <= 0 || !horasSemana || horasSemana <= 0 || horasSemana > 44) { alert(T.error); return; }
+      if (!salario || salario <= 0 || isNaN(horasSemana) || horasSemana < 1 || horasSemana > 44) { alert(T.error); return; }
       var horasMes = round2((horasSemana / 6) * 30);
       var valorHora = round2(salario / horasMes);
       var html = '<div class="result-value">' + T.hourlyRateLabel + ': ' + fmtNum(valorHora, lang) + '</div>' +
@@ -6719,10 +6771,10 @@
       else if (format === 'fractional') decimal = parseFraction(raw) !== null ? parseFraction(raw) + 1 : null;
       else if (format === 'american') decimal = americanToDecimal(raw);
       if (!decimal || isNaN(decimal) || decimal <= 1) { alert(T.error); return; }
-      var html = '<div class="result-extra">Decimal: <strong>' + round2(decimal) + '</strong></div>' +
+      var html = '<div class="result-extra">Decimal: <strong>' + nfm(round2(decimal), 2) + '</strong></div>' +
         '<div class="result-extra">' + T.fractionalLabel + ': <strong>' + decimalToFraction(decimal - 1) + '</strong></div>' +
         '<div class="result-extra">' + T.americanLabel + ': <strong>' + decimalToAmerican(decimal) + '</strong></div>' +
-        '<div class="result-value">' + T.impliedProbLabel + ': ' + round2(100 / decimal) + '%</div>';
+        '<div class="result-value">' + T.impliedProbLabel + ': ' + nfm(round2(100 / decimal), 2) + '%</div>';
       showResult(card, html);
     });
   }
@@ -6736,11 +6788,11 @@
         var prob = parseFloat(probRaw);
         if (prob <= 0 || prob > 100) { alert(T.error); return; }
         var odds = round2(100 / prob);
-        html = '<div class="result-value">' + T.oddsResultLabel + ': ' + odds + '</div>';
+        html = '<div class="result-value">' + T.oddsResultLabel + ': ' + nfm(odds, 2) + '</div>';
       } else if (oddsRaw !== '' && !isNaN(parseFloat(oddsRaw))) {
         var o = parseFloat(oddsRaw);
         if (o <= 1) { alert(T.error); return; }
-        html = '<div class="result-value">' + T.probResultLabel + ': ' + round2(100 / o) + '%</div>';
+        html = '<div class="result-value">' + T.probResultLabel + ': ' + nfm(round2(100 / o), 2) + '%</div>';
       } else { alert(T.error); return; }
       showResult(card, html);
     });
@@ -6753,8 +6805,8 @@
       if (lines.length < 2) { alert(T.error); return; }
       var combined = lines.reduce(function (acc, n) { return acc * n; }, 1);
       var prob = 100 / combined;
-      var html = '<div class="result-value">' + T.combinedOddsLabel + ': ' + round2(combined) + '</div>' +
-        '<div class="result-extra">' + T.combinedProbLabel + ': <strong>' + round2(prob) + '%</strong></div>' +
+      var html = '<div class="result-value">' + T.combinedOddsLabel + ': ' + nfm(round2(combined), 2) + '</div>' +
+        '<div class="result-extra">' + T.combinedProbLabel + ': <strong>' + nfm(round2(prob), 2) + '%</strong></div>' +
         '<div class="result-extra">' + T.legsCountLabel + ': <strong>' + lines.length + '</strong></div>';
       showResult(card, html);
     });
@@ -6767,7 +6819,7 @@
       var stake = parseFloat(document.getElementById('stakeAmount').value);
       if (!odds || odds <= 1 || isNaN(prob) || prob <= 0 || prob > 100 || !stake || stake <= 0) { alert(T.error); return; }
       var ev = round2(stake * ((prob / 100) * odds - 1));
-      var html = '<div class="result-value">EV: ' + fmtBRL(ev) + '</div>' +
+      var html = '<div class="result-value">EV: ' + fmtMoney(ev) + '</div>' +
         '<div class="result-extra">' + (ev >= 0 ? T.positiveEvMsg : T.negativeEvMsg) + '</div>';
       showResult(card, html);
     });
@@ -6782,8 +6834,8 @@
       if (!invest || invest <= 0 || isNaN(receita) || receita < 0) { alert(T.error); return; }
       var lucro = round2(receita - invest);
       var roi = round2((lucro / invest) * 100);
-      var html = '<div class="result-value">ROI: ' + roi + '%</div>' +
-        '<div class="result-extra">' + T.netProfitLabel + ': <strong>' + fmtBRL(lucro) + '</strong></div>';
+      var html = '<div class="result-value">ROI: ' + nfm(roi, 2) + '%</div>' +
+        '<div class="result-extra">' + T.netProfitLabel + ': <strong>' + fmtMoney(lucro) + '</strong></div>';
       showResult(card, html);
     });
   }
@@ -6794,7 +6846,7 @@
       var clientes = parseFloat(document.getElementById('cacCustomers').value);
       if (!gasto || gasto <= 0 || !clientes || clientes <= 0) { alert(T.error); return; }
       var cac = round2(gasto / clientes);
-      showResult(card, '<div class="result-value">CAC: ' + fmtBRL(cac) + '</div>');
+      showResult(card, '<div class="result-value">CAC: ' + fmtMoney(cac) + '</div>');
     });
   }
 
@@ -6806,10 +6858,10 @@
       var cac = parseFloat(document.getElementById('ltvCacInput').value);
       if (!ticket || ticket <= 0 || !freq || freq <= 0 || !retencao || retencao <= 0) { alert(T.error); return; }
       var ltv = round2(ticket * freq * retencao);
-      var html = '<div class="result-value">LTV: ' + fmtBRL(ltv) + '</div>';
+      var html = '<div class="result-value">LTV: ' + fmtMoney(ltv) + '</div>';
       if (!isNaN(cac) && cac > 0) {
         var ratio = round2(ltv / cac);
-        html += '<div class="result-extra">LTV/CAC: <strong>' + ratio + '</strong> — ' + (ratio > 3 ? T.healthyRatioMsg : T.unhealthyRatioMsg) + '</div>';
+        html += '<div class="result-extra">LTV/CAC: <strong>' + nfm(ratio, 2) + '</strong> — ' + (ratio > 3 ? T.healthyRatioMsg : T.unhealthyRatioMsg) + '</div>';
       }
       showResult(card, html);
     });
@@ -6820,13 +6872,13 @@
       var gasto = parseFloat(document.getElementById('adSpendCpm').value);
       var impressoes = parseFloat(document.getElementById('adImpressions').value);
       var clicks = parseFloat(document.getElementById('adClicks').value);
-      if (!gasto || gasto <= 0 || !impressoes || impressoes <= 0 || !clicks || clicks < 0) { alert(T.error); return; }
+      if (!gasto || gasto <= 0 || !impressoes || impressoes <= 0 || isNaN(clicks) || clicks < 0) { alert(T.error); return; }
       var cpm = round2((gasto / impressoes) * 1000);
-      var cpc = clicks > 0 ? round2(gasto / clicks) : 0;
+      var cpc = clicks > 0 ? round2(gasto / clicks) : null;
       var ctr = round2((clicks / impressoes) * 100);
-      var html = '<div class="result-extra">CPM: <strong>' + fmtBRL(cpm) + '</strong></div>' +
-        '<div class="result-extra">CPC: <strong>' + fmtBRL(cpc) + '</strong></div>' +
-        '<div class="result-value">CTR: ' + ctr + '%</div>';
+      var html = '<div class="result-extra">CPM: <strong>' + fmtMoney(cpm) + '</strong></div>' +
+        '<div class="result-extra">CPC: <strong>' + (cpc === null ? '\u2014' : fmtMoney(cpc)) + '</strong></div>' +
+        '<div class="result-value">CTR: ' + nfm(ctr, 2) + '%</div>';
       showResult(card, html);
     });
   }
@@ -6844,11 +6896,11 @@
     for (var i = 0; i < units.length; i++) {
       if (seconds >= units[i][0]) {
         var val = seconds / units[i][0];
-        var str = val >= 1000 ? val.toExponential(2) : round2(val).toString();
+        var str = val >= 1000 ? (pageLang() === 'en' ? val.toExponential(2) : val.toExponential(2).replace('.', ',')) : nfm(round2(val), 2);
         return str + ' ' + units[i][1];
       }
     }
-    return round2(seconds) + ' ' + T.unitSeconds;
+    return nfm(round2(seconds), 2) + ' ' + T.unitSeconds;
   }
   function initPasswordCrackTimeEstimator(card, T) {
     on(card, 'calc', function () {
@@ -6862,7 +6914,7 @@
       var log10Seconds = log10Combos - Math.log10(2) - Math.log10(attemptsPerSec);
       var seconds = Math.pow(10, log10Seconds);
       var html = '<div class="result-value">' + T.estimatedTimeLabel + ': ' + formatBigDuration(seconds, T) + '</div>' +
-        '<div class="result-extra">' + T.combinationsLabel + ': <strong>10^' + round2(log10Combos) + '</strong></div>';
+        '<div class="result-extra">' + T.combinationsLabel + ': <strong>10^' + nfm(round2(log10Combos), 2) + '</strong></div>';
       showResult(card, html);
     });
   }
@@ -7003,7 +7055,7 @@
       var illumination = round2((1 - Math.cos(2 * Math.PI * phase)) / 2 * 100);
       var nameKey = moonPhaseNameKey(phase);
       var html = '<div class="result-value">' + T[nameKey] + '</div>' +
-        '<div class="result-extra">' + T.illuminationLabel + ': <strong>' + illumination + '%</strong></div>';
+        '<div class="result-extra">' + T.illuminationLabel + ': <strong>' + nfm(illumination, 2) + '%</strong></div>';
       showResult(card, html);
     });
   }
@@ -7048,6 +7100,17 @@
   var CN_CODE_WOMEN = { 34: ['S', '155/80A'], 36: ['M', '160/84A'], 38: ['M', '160/84A'], 40: ['L', '165/88A'], 42: ['XL', '170/92A'], 44: ['XXL', '175/96A'] };
   var CN_CODE_MEN = { 44: ['S', '165/84A'], 46: ['S', '165/84A'], 48: ['M', '170/88A'], 50: ['L', '175/92A'], 52: ['XL', '180/96A'], 54: ['XXL', '185/100A'], 56: ['3XL', '190/104A'] };
   var ASIAN_LETTERS = ['S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'];
+  // Exibição fora do pt: letras brasileiras (PP, P, M, G, GG...) -> letras internacionais.
+  var CLOTHING_LETTER_INTL = { PP: 'XS', P: 'S', M: 'M', G: 'L', GG: 'XL', GG1: 'XXL', GG2: '3XL', GG3: '4XL', GG4: '5XL', EXG: '3XL' };
+  function clothingLetterForLang(letter, lang) {
+    if (lang === 'pt') return letter;
+    var out = [];
+    String(letter).split('/').forEach(function (t) {
+      var v = CLOTHING_LETTER_INTL[t] || t;
+      if (out.indexOf(v) === -1) out.push(v);
+    });
+    return out.join('/');
+  }
   function initClothingSizeConverter(card, T) {
     on(card, 'generate', function () {
       var gender = document.getElementById('sizeGender').value;
@@ -7070,7 +7133,7 @@
         cnHtml = '<div class="result-note">' + T.cnNoData + '</div>';
       }
       showResult(card,
-        '<div class="result-value">BR ' + m.br + ' / ' + m.letter + approx + '</div>' +
+        '<div class="result-value">BR ' + m.br + ' / ' + clothingLetterForLang(m.letter, card.dataset.lang) + approx + '</div>' +
         '<div class="result-extra">US: <strong>' + m.us + '</strong></div>' +
         '<div class="result-extra">EU: <strong>' + m.eu + '</strong></div>' +
         '<div class="result-extra">UK: <strong>' + m.uk + '</strong></div>' +
@@ -7117,8 +7180,7 @@
         cnLine = '<div class="result-note">' + T.cnKidsNote + '</div>';
       } else {
         var foot = (m.eu + 10) / 2;
-        var footTxt = (Math.round(foot * 10) / 10).toFixed(1);
-        if (document.documentElement.lang.slice(0, 2) !== 'en') footTxt = footTxt.replace('.', ',');
+        var footTxt = nfx(Math.round(foot * 10) / 10, 1);
         cnLine = '<div class="result-extra">' + T.cnLabel + ': <strong>' + m.eu + '</strong> · ' + T.footLabel + ': <strong>' + footTxt + ' cm (' + Math.round(foot * 10) + ' mm)</strong></div>' +
           '<div class="result-note">' + T.cnNote + '</div>';
       }
@@ -7134,13 +7196,13 @@
   }
 
   var RING_TABLE = [
-    { c: 44.3, br: 8, us: 3.5 }, { c: 45.5, br: 9, us: 4 }, { c: 46.8, br: 10, us: 4.5 },
-    { c: 48.0, br: 11, us: 5 }, { c: 49.3, br: 12, us: 5.5 }, { c: 50.6, br: 13, us: 6 },
-    { c: 51.9, br: 14, us: 6.5 }, { c: 53.1, br: 15, us: 7 }, { c: 54.4, br: 16, us: 7.5 },
-    { c: 55.7, br: 17, us: 8 }, { c: 56.9, br: 18, us: 8.5 }, { c: 58.2, br: 19, us: 9 },
-    { c: 59.5, br: 20, us: 9.5 }, { c: 60.7, br: 21, us: 10 }, { c: 62.0, br: 22, us: 10.5 },
-    { c: 63.5, br: 23, us: 11 }, { c: 64.7, br: 24, us: 11.5 }, { c: 66.0, br: 25, us: 12 },
-    { c: 67.2, br: 26, us: 12.5 }, { c: 68.5, br: 27, us: 13 },
+    { c: 44.3, br: 8, us: 3 }, { c: 45.5, br: 9, us: 3.5 }, { c: 46.8, br: 10, us: 4 },
+    { c: 48.0, br: 11, us: 4.5 }, { c: 49.3, br: 12, us: 5 }, { c: 50.6, br: 13, us: 5.5 },
+    { c: 51.9, br: 14, us: 6 }, { c: 53.1, br: 15, us: 6.5 }, { c: 54.4, br: 16, us: 7 },
+    { c: 55.7, br: 17, us: 7.5 }, { c: 56.9, br: 18, us: 8 }, { c: 58.2, br: 19, us: 8.5 },
+    { c: 59.5, br: 20, us: 9 }, { c: 60.7, br: 21, us: 9.5 }, { c: 62.0, br: 22, us: 10 },
+    { c: 63.5, br: 23, us: 10.5 }, { c: 64.7, br: 24, us: 11 }, { c: 66.0, br: 25, us: 11.5 },
+    { c: 67.2, br: 26, us: 12 }, { c: 68.5, br: 27, us: 12.5 },
   ];
   function initRingSizeCalculator(card, T) {
     on(card, 'generate', function () {
@@ -7331,12 +7393,12 @@
     6: 'Açúcar / Perfume', 7: 'Lã / Latão', 8: 'Barro / Papoula', 9: 'Cerâmica / Vime', 10: 'Estanho / Zinco',
     11: 'Aço', 12: 'Seda / Ligas', 13: 'Linho / Renda', 14: 'Marfim (Ágata)', 15: 'Cristal',
     16: 'Safira Amarela', 17: 'Rosa', 18: 'Turquesa', 19: 'Cretone / Água-marinha', 20: 'Porcelana',
-    21: 'Opala', 22: 'Bronze', 23: 'Crisópio / Veludo', 24: 'Oportunidade / Acetinado', 25: 'Prata',
-    26: 'Alexandrita', 27: 'Acaju', 28: 'Nickel', 29: 'Veludo', 30: 'Pérola / Novos Votos',
+    21: 'Opala', 22: 'Bronze', 23: 'Crisopázio / Veludo', 24: 'Oportunidade / Acetinado', 25: 'Prata',
+    26: 'Alexandrita', 27: 'Acaju', 28: 'Níquel', 29: 'Veludo', 30: 'Pérola / Novos Votos',
     31: 'Basílio', 32: 'Pinho', 33: 'Ametista / Ilusão', 34: 'Âmbar', 35: 'Coral',
     36: 'Cádmio', 37: 'Aventurina', 38: 'Carvalho', 39: 'Crepe', 40: 'Esmeralda / Rubi',
-    41: 'Terracota', 42: 'Prata Negra', 43: 'Zafira', 44: 'Titânio', 45: 'Rubi',
-    46: 'Alabastro', 47: 'Cachemira', 48: 'Berilo', 49: 'Zafira Azul', 50: 'Ouro',
+    41: 'Terracota', 42: 'Prata Negra', 43: 'Safira', 44: 'Titânio', 45: 'Rubi',
+    46: 'Alabastro', 47: 'Caxemira', 48: 'Berilo', 49: 'Safira Azul', 50: 'Ouro',
     55: 'Esmeralda', 60: 'Diamante', 65: 'Ouro Azul', 70: 'Platina', 75: 'Brilhante / Coroa',
   };
   function initWeddingAnniversaryCalculator(card, T) {
@@ -7467,7 +7529,7 @@
       if (lang === 'en') {
         score = 206.835 - 1.015 * wps - 84.6 * spw;
         var grade = 0.39 * wps + 11.8 * spw - 15.59;
-        gradeHtml = '<div class="result-extra">' + T.gradeLabel + ': <strong>' + grade.toFixed(1) + '</strong></div>';
+        gradeHtml = '<div class="result-extra">' + T.gradeLabel + ': <strong>' + nfx(grade, 1) + '</strong></div>';
       } else if (lang === 'pt') {
         score = 226.614882 - 1.036134 * wps - 72.451284 * spw;
       } else {
@@ -7484,7 +7546,7 @@
       else if (score >= 30) bandIdx = 5;
       else bandIdx = 6;
       var bandLabel = (T.bands && T.bands[bandIdx]) || '';
-      var html = '<div class="result-value">' + T.scoreLabel + ': ' + score.toFixed(1) + '</div>' +
+      var html = '<div class="result-value">' + T.scoreLabel + ': ' + nfx(score, 1) + '</div>' +
         '<div class="result-extra readability-band">' + escHtml(bandLabel) + '</div>' +
         gradeHtml +
         '<div class="result-extra">' + T.wordsLabel + ': <strong>' + words.toLocaleString(localeFor(lang)) + '</strong></div>' +
@@ -7666,7 +7728,7 @@
       return '1/' + denom + 's';
     }
     if (sec < 60) {
-      return (Math.round(sec * 10) / 10) + 's';
+      return nfm(Math.round(sec * 10) / 10, 1) + 's';
     }
     var totalSec = Math.round(sec);
     var mm = Math.floor(totalSec / 60);
@@ -7675,7 +7737,7 @@
   }
   function formatShutterFraction(sec) {
     if (!isFinite(sec) || sec <= 0) return '-';
-    if (sec >= 1) return (Math.round(sec * 10) / 10) + 's';
+    if (sec >= 1) return nfm(Math.round(sec * 10) / 10, 1) + 's';
     var denom = Math.round(1 / sec);
     return '1/' + denom + 's';
   }
@@ -7854,7 +7916,7 @@
 
       var stopsChanged;
       if (changedField === 'newIso') stopsChanged = Math.log2(newValue / origIso);
-      else if (changedField === 'newAperture') stopsChanged = 2 * Math.log2(newValue / origAperture);
+      else if (changedField === 'newAperture') stopsChanged = -2 * Math.log2(newValue / origAperture);
       else stopsChanged = Math.log2(newValue / origShutter);
 
       var solvedValue, solvedLabel, solvedUnit;
@@ -7862,7 +7924,7 @@
         solvedValue = origIso * Math.pow(2, -stopsChanged);
         solvedLabel = T.solvedIsoLabel; solvedUnit = 'ISO ' + fmtNum(solvedValue, lang, 0);
       } else if (solveField === 'aperture') {
-        solvedValue = origAperture * Math.pow(2, -stopsChanged / 2);
+        solvedValue = origAperture * Math.pow(2, stopsChanged / 2);
         solvedLabel = T.solvedApertureLabel; solvedUnit = 'f/' + fmtNum(solvedValue, lang, 1);
       } else {
         solvedValue = origShutter * Math.pow(2, -stopsChanged);
@@ -7924,7 +7986,7 @@
         maxExposure = 300 / (f * crop);
       } else {
         if (!aperture || aperture <= 0 || !pixelPitch || pixelPitch <= 0) { alert(T.error); return; }
-        maxExposure = (35 * aperture + 30 * pixelPitch) / (f * crop);
+        maxExposure = (35 * aperture + 30 * pixelPitch) / f;
       }
       var decimals = maxExposure < 10 ? 1 : 0;
       var html =

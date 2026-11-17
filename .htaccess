@@ -1,15 +1,27 @@
 RewriteEngine On
 
+# Domínio único: o Google indexou http://, www. e https:// como páginas separadas (Search Console, out/2026).
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://utoolsgo.com%{REQUEST_URI} [R=301,L]
+# http -> https (a 2ª condição evita loop atrás de proxy/CDN que termina o SSL)
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^ https://utoolsgo.com%{REQUEST_URI} [R=301,L]
+
 # Redirecionamentos 301 — categorias "Financeiras" e "Culinária" foram unidas a
 # "Calculadoras" e "Dia a Dia" respectivamente (consolidação de menu); as
-# ferramentas individuais mantêm suas URLs originais, só a página-índice da
-# categoria antiga muda de lugar.
+# URLs antigas de ferramentas (ex.: /financeiras/regra-de-tres/) são redirecionadas
+# com 301 pelo index.php (busca o slug da ferramenta no idioma).
 RewriteRule ^financeiras/?$ /calculadoras/ [R=301,L]
 RewriteRule ^en/financial/?$ /en/calculators/ [R=301,L]
 RewriteRule ^es/financieras/?$ /es/calculadoras/ [R=301,L]
 RewriteRule ^culinaria/?$ /dia-a-dia/ [R=301,L]
 RewriteRule ^en/cooking/?$ /en/everyday/ [R=301,L]
 RewriteRule ^es/cocina/?$ /es/dia-a-dia/ [R=301,L]
+
+# Bloqueia arquivos internos (código, dados e utilitários não são públicos)
+RewriteRule ^(data|includes)(/|$) - [F,L]
+RewriteRule ^(gen_sitemap\.php|README\.md|\.gitignore)$ - [F,L]
 
 # Serve arquivos e pastas reais diretamente (assets, favicon, etc.)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
@@ -19,11 +31,32 @@ RewriteRule ^ - [L]
 # Tudo mais vai para o front controller
 RewriteRule ^ index.php [L]
 
-# Cache básico para assets estáticos
+# Cache de assets: CSS e JS levam ?v=<mtime> na URL (ver asset() em index.php),
+# então podem ficar em cache por 1 ano sem risco de servir versão velha.
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType text/css "access plus 1 month"
-  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
   ExpiresByType image/png "access plus 1 year"
   ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+</IfModule>
+
+# Compressão
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/xml application/javascript text/javascript application/json image/svg+xml
+</IfModule>
+
+# Cabeçalhos de segurança básicos
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header unset X-Powered-By
+  <FilesMatch "\.(css|js)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
 </IfModule>

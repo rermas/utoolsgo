@@ -616,3 +616,22 @@ Nova categoria `photography` (`fotografia`/`photography`/`fotografia` em PT/EN/E
 - `shoe-size-converter`: mostra o número chinês (CN = EU para adultos) e o comprimento do pé, `(CN + 10) / 2` cm; infantil não converte CN (numeração varia entre anúncios).
 - `clothing-size-converter`: mostra o código padrão chinês GB/T (altura/busto + tipo A) por tamanho EU e a sugestão de letra para etiquetas asiáticas de Shein/Shopee/AliExpress (+1 a +2 tamanhos). Sem código acima de XXL (fem.) / 3XL (masc.), pois não há tabela verificada.
 - Artigos e FAQ atualizados em PT/EN/ES. Sitemap inalterado (823).
+
+## 2026-10-17 — Revisão geral (textos, bugs, SEO técnico)
+**Textos (`data/content.php`, 311 entradas × 3 idiomas):** 12 revisores independentes aplicaram 353 correções objetivas, cada trecho validado como ocorrência única e `php -l` limpo. Tipos: 146 títulos/metas acima do limite (65/160), 119 fatos, 40 gramática, 21 cálculos de exemplo, 13 ortografia, 8 idioma, 6 HTML. Destaques: exemplos numéricos refeitos (rejunte, escada, HSL, exposição equivalente, pace), regras de feriados do México, tabela de anéis (US), base legal do salário mínimo 2023, ângulos do `linear-gradient`, 78 links internos quebrados (agora 0), cálculo de feriados úteis de Moçambique. Nota: a descrição da regra NPF mais acima neste README (fase de Fotografia) está desatualizada; o JS passou a usar a distância focal real, sem dividir pelo fator de corte.
+**Bugs de JS (`assets/js/tools.js`):** sinal da abertura em exposição equivalente; NPF; INSS/IRRF de férias incluindo o terço; taxa mensal e roll-over em dívidas; ponto flutuante em faltas permitidas; maiúsculas/minúsculas com acentos; variação 0%; taxas equivalentes (1+a)^(1/12)−1; BigInt em conversor de base e fatorial; CSV com aspas e quebras de linha; tabela de anéis US; /31 e /32; iOS no user-agent; extensão de GIF/BMP; busca da tabela de status HTTP; separador decimal pt/es; moeda neutra em en/es nas ferramentas de marketing e salário.
+**Servidor/SEO (`index.php`, `.htaccess`, `gen_sitemap.php`):** home PT deixa de redirecionar para /en/ quando não há `Accept-Language` (Googlebot); URLs com `//` ou sem barra final recebem 301; hreflang não aponta para categorias inexistentes (Trabalhista); metas e títulos próprios nas 64 páginas de categoria; og:image/twitter:card (`assets/img/og-image.png`); 404 com `noindex` e sem canonical; FAQ com `<a>`/`<code>` deixou de sair escapado; CSS/JS com `?v=mtime` e cache de 1 ano; `tools.js` com `defer` e fora das páginas só de artigo; `role="status" aria-live` nos resultados e rótulos nos campos sem label; bloqueio de `data/`, `includes/`, `README.md`, `gen_sitemap.php`; compressão e cabeçalhos de segurança; Set-Cookie só quando o idioma muda; `gen_sitemap.php` usa `__DIR__` e só roda via CLI; favicon 1600→512 px.
+**Verificação:** `php -l`/`node -c` limpos; crawl das 823 URLs (200, 0 links quebrados, 0 problemas de hreflang, 0 descrições duplicadas); Playwright nas 756 páginas de ferramenta em pt/en/es sem erro de JS e sem NaN/undefined. Pendências conscientes (decisão do dono): ver `uToolsGo-revisao-2026-10.md`.
+
+## 2026-10-23 — Auditoria SEO
+- Meta description das páginas de categoria limitada a 158 caracteres (27 categorias passavam de 160 após a revisão de 17/10).
+
+## 2026-10-27 — Indexação (dados do Search Console)
+- `.htaccess`: 301 de `www.` e `http://` para `https://utoolsgo.com` no topo das regras. O Google tinha 144 URLs indexadas em hosts duplicados (http, www, http+www).
+- `index.php`: URL de ferramenta que mudou de categoria (ex.: `/financeiras/regra-de-tres/`, `/en/financial/tip-calculator/`, `/es/calculadoras/imc/`) recebe 301 para a URL atual quando o slug é único no idioma; antes dava 404.
+
+## 2026-11-17 — Queda de páginas indexadas: SEO on-page e links internos
+- `data/content.php`: title e meta description reescritos em todas as ferramentas (313 titles e 680 metas alterados; titles 33–60 caracteres, metas 140–158, sem duplicados por idioma). Nenhum outro campo mudou.
+- `index.php`: bloco "Ferramentas relacionadas" em todas as páginas de ferramenta (6 seguintes da mesma categoria, em ordem circular; imagens continua listando todas). Páginas de ferramenta passaram de 2 para 8+ links internos recebidos.
+- `index.php`: JSON-LD `BreadcrumbList` nas 756 páginas de ferramenta e `WebSite` nas 3 homes.
+- `data/i18n.php`: titles das homes e categorias até 60 caracteres; metas das homes com 149–155 caracteres.
