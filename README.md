@@ -635,3 +635,8 @@ Nova categoria `photography` (`fotografia`/`photography`/`fotografia` em PT/EN/E
 - `index.php`: bloco "Ferramentas relacionadas" em todas as páginas de ferramenta (6 seguintes da mesma categoria, em ordem circular; imagens continua listando todas). Páginas de ferramenta passaram de 2 para 8+ links internos recebidos.
 - `index.php`: JSON-LD `BreadcrumbList` nas 756 páginas de ferramenta e `WebSite` nas 3 homes.
 - `data/i18n.php`: titles das homes e categorias até 60 caracteres; metas das homes com 149–155 caracteres.
+
+## 2026-11-18 — Texto próprio mínimo em todas as páginas
+- `data/extra.php` (novo): texto acrescentado ao artigo e ao FAQ de `content.php`; `index.php` faz o merge no início. Todas as 756 páginas passaram a ter no mínimo 250 palavras de texto próprio (artigo + FAQ, sem tabelas); antes, 477 tinham menos.
+- Feriados por ano (54 páginas, 9 países): seções calculadas por script a partir das tabelas (dias úteis do ano, maior e menor intervalo sem feriado, fins de semana prolongados e pontes com datas, comparação com o ano vizinho, 3 FAQs). Links existentes intactos.
+- Conversores de imagem, salário mínimo por ano, verificadores de feriados e demais ferramentas curtas: seções específicas de cada página (exemplos, limites, erros comuns). Para regenerar o texto dos feriados, o script só depende das tabelas em `content.php`.

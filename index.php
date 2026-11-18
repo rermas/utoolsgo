@@ -11,6 +11,12 @@ require __DIR__ . '/includes/functions.php';
 $tools = require __DIR__ . '/data/tools.php';
 $i18n  = require __DIR__ . '/data/i18n.php';
 $content = require __DIR__ . '/data/content.php';
+foreach (require __DIR__ . '/data/extra.php' as $xid => $xl) {
+    foreach ($xl as $xlang => $x) {
+        $content[$xid][$xlang]['article'] .= $x['article'];
+        $content[$xid][$xlang]['faq'] = array_merge($content[$xid][$xlang]['faq'] ?? [], $x['faq'] ?? []);
+    }
+}
 
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
 $rawPath = parse_url($requestUri, PHP_URL_PATH) ?? '/';
